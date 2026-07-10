@@ -9,6 +9,23 @@ require_once $publicRoot . '/app/bootstrap_core.php';
 
 if (!($pdo instanceof PDO)) { http_response_code(500); exit('DB unavailable'); }
 
+// Dispatch sub-routes under /contact/
+$rawPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
+$pathTrimmed = trim($rawPath, '/');
+$basePrefix = 'contact';
+$subPath = '';
+if ($pathTrimmed !== $basePrefix && strpos($pathTrimmed, $basePrefix . '/') === 0) {
+    $subPath = substr($pathTrimmed, strlen($basePrefix) + 1);
+}
+$routeMap = [
+    'submit.php' => __DIR__ . '/submit.php',
+    'submit'     => __DIR__ . '/submit.php',
+];
+if ($subPath !== '' && isset($routeMap[$subPath])) {
+    require $routeMap[$subPath];
+    exit;
+}
+
 $ctx = cf_public_ctx($pdo);
 $csrfEsc = htmlspecialchars($ctx['csrf'], ENT_QUOTES, 'UTF-8');
 $csrfJs = json_encode($ctx['csrf'], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
@@ -22,13 +39,13 @@ function cf_render_field(array $f, string $csrfEsc): string {
     $required = !empty($f['required']) ? ' required' : '';
     $mark = !empty($f['required']) ? ' *' : '';
     if ($f['type'] === 'textarea') {
-        return '<label class="cf-field" data-field="' . $name . '"\u003e
+        return '<label class="cf-field" data-field="' . $name . '">
             <span class="cf-label">' . $label . $mark . '</span>
             <textarea class="cf-input" name="' . $name . '" rows="5"' . $required . '></textarea>
         </label>';
     }
     $type = htmlspecialchars($f['type'], ENT_QUOTES, 'UTF-8');
-    return '<label class="cf-field" data-field="' . $name . '"\u003e
+    return '<label class="cf-field" data-field="' . $name . '">
         <span class="cf-label">' . $label . $mark . '</span>
         <input class="cf-input" type="' . $type . '" name="' . $name . '"' . $required . '>
     </label>';
