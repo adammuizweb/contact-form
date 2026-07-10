@@ -72,10 +72,6 @@ function cf_fetch_rows(PDO $pdo, string $statusFilter, string $search, array $id
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
-function cf_s(string $text): string {
-    return htmlspecialchars((string)$text, ENT_QUOTES, 'UTF-8');
-}
-
 function cf_status_label(array $row): string {
     if ((int)$row['is_deleted']) return 'Trash';
     if ((int)$row['is_spam']) return 'Spam';
