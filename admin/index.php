@@ -22,6 +22,16 @@ if (!cf_current_user_can_access($pdo)) {
 $csrf = function_exists('csrf_token') ? csrf_token() : '';
 $saveMessage = '';
 
+$basePage = '?page=admin/tools/contact-form';
+
+// ---- Export / Print dispatcher ----
+$cf_action = $_GET['action'] ?? '';
+if (in_array($cf_action, ['export', 'print'], true)) {
+    require_once __DIR__ . '/print.php';
+    cf_export_print_dispatcher($pdo, $cf_action, $basePage, $csrf);
+    return;
+}
+
 // ---- reCAPTCHA Save ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recaptcha'])) {
     if (!function_exists('csrf_check') || !csrf_check($_POST['csrf_token'] ?? '')) {
@@ -83,27 +93,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_form_builder']))
     }
 }
 
-// ---- Single mark read / delete ----
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_read']) && isset($_POST['id'])) {
-    if (!function_exists('csrf_check') || !csrf_check($_POST['csrf_token'] ?? '')) {
-        $saveMessage = 'Invalid CSRF.';
-    } else {
-        $stmt = $pdo->prepare('UPDATE `contact_submissions` SET `is_read` = 1 WHERE `id` = ?');
-        $stmt->execute([(int)$_POST['id']]);
-        $saveMessage = 'Marked as read.';
-    }
+// ---- Single actions ----
+function cf_do_single_redirect(string $redirect): void {
+    if ($redirect === '') return;
+    echo '<script>location.replace(' . json_encode($redirect, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ');</script>';
+    exit;
 }
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete']) && isset($_POST['id'])) {
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && !isset($_POST['bulk_action'])) {
     if (!function_exists('csrf_check') || !csrf_check($_POST['csrf_token'] ?? '')) {
         $saveMessage = 'Invalid CSRF.';
     } else {
-        $stmt = $pdo->prepare('DELETE FROM `contact_submissions` WHERE `id` = ?');
-        $stmt->execute([(int)$_POST['id']]);
-        $saveMessage = 'Deleted.';
+        $id = (int)$_POST['id'];
+        if (isset($_POST['mark_read'])) {
+            $pdo->prepare('UPDATE `contact_submissions` SET `is_read` = 1 WHERE `id` = ?')->execute([$id]);
+            $saveMessage = 'Marked as read.';
+            cf_do_single_redirect($basePage . '&status=read');
+        } elseif (isset($_POST['mark_unread'])) {
+            $pdo->prepare('UPDATE `contact_submissions` SET `is_read` = 0 WHERE `id` = ?')->execute([$id]);
+            $saveMessage = 'Marked as unread.';
+            cf_do_single_redirect($basePage . '&status=unread');
+        } elseif (isset($_POST['mark_spam'])) {
+            $pdo->prepare('UPDATE `contact_submissions` SET `is_spam` = 1, `is_read` = 1 WHERE `id` = ?')->execute([$id]);
+            $saveMessage = 'Marked as spam.';
+            cf_do_single_redirect($basePage . '&status=spam');
+        } elseif (isset($_POST['mark_not_spam'])) {
+            $pdo->prepare('UPDATE `contact_submissions` SET `is_spam` = 0, `is_read` = 0 WHERE `id` = ?')->execute([$id]);
+            $saveMessage = 'Marked as not spam.';
+            cf_do_single_redirect($basePage . '&status=unread');
+        } elseif (isset($_POST['move_trash'])) {
+            $pdo->prepare('UPDATE `contact_submissions` SET `is_deleted` = 1 WHERE `id` = ?')->execute([$id]);
+            $saveMessage = 'Moved to trash.';
+            cf_do_single_redirect($basePage . '&status=trash');
+        } elseif (isset($_POST['restore'])) {
+            $pdo->prepare('UPDATE `contact_submissions` SET `is_deleted` = 0, `is_spam` = 0 WHERE `id` = ?')->execute([$id]);
+            $saveMessage = 'Restored.';
+            cf_do_single_redirect($basePage . '&status=all');
+        } elseif (isset($_POST['delete_permanent'])) {
+            $pdo->prepare('DELETE FROM `contact_submissions` WHERE `id` = ?')->execute([$id]);
+            $saveMessage = 'Permanently deleted.';
+            cf_do_single_redirect($basePage . '&status=trash');
+        }
     }
 }
 
-// ---- Bulk action ----
+// ---- Bulk actions ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_action']) && !empty($_POST['selected_ids'])) {
     if (!function_exists('csrf_check') || !csrf_check($_POST['csrf_token'] ?? '')) {
         $saveMessage = 'Invalid CSRF.';
@@ -113,25 +147,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_action']) && !em
             $action = $_POST['bulk_action'];
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
             if ($action === 'mark_read') {
-                $st = $pdo->prepare("UPDATE `contact_submissions` SET `is_read` = 1 WHERE `id` IN ($placeholders)");
-                $st->execute($ids);
+                $pdo->prepare("UPDATE `contact_submissions` SET `is_read` = 1 WHERE `id` IN ($placeholders)")->execute($ids);
                 $saveMessage = 'Marked ' . count($ids) . ' submission(s) as read.';
-            } elseif ($action === 'delete') {
-                $st = $pdo->prepare("DELETE FROM `contact_submissions` WHERE `id` IN ($placeholders)");
-                $st->execute($ids);
-                $saveMessage = 'Deleted ' . count($ids) . ' submission(s).';
+            } elseif ($action === 'mark_unread') {
+                $pdo->prepare("UPDATE `contact_submissions` SET `is_read` = 0 WHERE `id` IN ($placeholders)")->execute($ids);
+                $saveMessage = 'Marked ' . count($ids) . ' submission(s) as unread.';
+            } elseif ($action === 'mark_spam') {
+                $pdo->prepare("UPDATE `contact_submissions` SET `is_spam` = 1, `is_read` = 1 WHERE `id` IN ($placeholders)")->execute($ids);
+                $saveMessage = 'Marked ' . count($ids) . ' submission(s) as spam.';
+            } elseif ($action === 'mark_not_spam') {
+                $pdo->prepare("UPDATE `contact_submissions` SET `is_spam` = 0, `is_read` = 0 WHERE `id` IN ($placeholders)")->execute($ids);
+                $saveMessage = 'Marked ' . count($ids) . ' submission(s) as not spam.';
+            } elseif ($action === 'move_trash') {
+                $pdo->prepare("UPDATE `contact_submissions` SET `is_deleted` = 1 WHERE `id` IN ($placeholders)")->execute($ids);
+                $saveMessage = 'Moved ' . count($ids) . ' submission(s) to trash.';
+            } elseif ($action === 'restore') {
+                $pdo->prepare("UPDATE `contact_submissions` SET `is_deleted` = 0, `is_spam` = 0 WHERE `id` IN ($placeholders)")->execute($ids);
+                $saveMessage = 'Restored ' . count($ids) . ' submission(s).';
+            } elseif ($action === 'delete_permanent') {
+                $pdo->prepare("DELETE FROM `contact_submissions` WHERE `id` IN ($placeholders)")->execute($ids);
+                $saveMessage = 'Permanently deleted ' . count($ids) . ' submission(s).';
             }
         }
     }
 }
 
-// PRG: JS redirect after POST
+// PRG after settings save
 if (!empty($accessSavedFlag)) {
-    echo '<script>location.replace("?page=admin/tools/contact-form&access_saved=1");</script>';
+    echo '<script>location.replace(' . json_encode($basePage . '&access_saved=1', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ');</script>';
     return;
 }
 if (!empty($recaptchaSavedFlag)) {
-    echo '<script>location.replace("?page=admin/tools/contact-form&recaptcha_saved=1");</script>';
+    echo '<script>location.replace(' . json_encode($basePage . '&recaptcha_saved=1', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ');</script>';
     return;
 }
 
@@ -159,20 +206,31 @@ try {
 
 // ---- Filter / Search / Pagination ----
 $statusFilter = $_GET['status'] ?? 'all';
-$allowedFilters = ['all', 'read', 'unread'];
+$allowedFilters = ['all', 'unread', 'read', 'spam', 'trash'];
 if (!in_array($statusFilter, $allowedFilters, true)) $statusFilter = 'all';
 $search = trim((string)($_GET['q'] ?? ''));
 
 $where = "WHERE 1=1";
 $countWhere = "WHERE 1=1";
 $params = [];
-if ($statusFilter === 'read') {
-    $where .= " AND `is_read` = 1";
-    $countWhere .= " AND `is_read` = 1";
-} elseif ($statusFilter === 'unread') {
-    $where .= " AND `is_read` = 0";
-    $countWhere .= " AND `is_read` = 0";
+
+if ($statusFilter === 'unread') {
+    $where .= " AND `is_deleted` = 0 AND `is_spam` = 0 AND `is_read` = 0";
+    $countWhere .= " AND `is_deleted` = 0 AND `is_spam` = 0 AND `is_read` = 0";
+} elseif ($statusFilter === 'read') {
+    $where .= " AND `is_deleted` = 0 AND `is_spam` = 0 AND `is_read` = 1";
+    $countWhere .= " AND `is_deleted` = 0 AND `is_spam` = 0 AND `is_read` = 1";
+} elseif ($statusFilter === 'spam') {
+    $where .= " AND `is_deleted` = 0 AND `is_spam` = 1";
+    $countWhere .= " AND `is_deleted` = 0 AND `is_spam` = 1";
+} elseif ($statusFilter === 'trash') {
+    $where .= " AND `is_deleted` = 1";
+    $countWhere .= " AND `is_deleted` = 1";
+} else { // all
+    $where .= " AND `is_deleted` = 0";
+    $countWhere .= " AND `is_deleted` = 0";
 }
+
 if ($search !== '') {
     $where .= " AND (`name` LIKE :q OR `contact` LIKE :q OR `message` LIKE :q OR `data_json` LIKE :q)";
     $countWhere .= " AND (`name` LIKE :q OR `contact` LIKE :q OR `message` LIKE :q OR `data_json` LIKE :q)";
@@ -202,7 +260,7 @@ $fields = cf_get_fields($pdo);
 $fieldsJson = json_encode($fields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 $submissionsJson = json_encode($submissions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 
-$filterLabels = ['all' => 'All', 'read' => 'Read', 'unread' => 'Unread'];
+$filterLabels = ['all' => 'All', 'unread' => 'Unread', 'read' => 'Read', 'spam' => 'Spam', 'trash' => 'Trash'];
 
 function cf_filter_url(array $overrides): string {
     $base = '?page=admin/tools/contact-form';
@@ -214,6 +272,56 @@ function cf_filter_url(array $overrides): string {
 
 function cf_s(string $text): string {
     return htmlspecialchars((string)$text, ENT_QUOTES, 'UTF-8');
+}
+
+function cf_status_badge(array $s): string {
+    if ((int)$s['is_deleted']) return '<span class="cf-badge cf-badge--trash">Trash</span>';
+    if ((int)$s['is_spam']) return '<span class="cf-badge cf-badge--spam">Spam</span>';
+    if ((int)$s['is_read']) return '<span class="cf-badge cf-badge--read">Read</span>';
+    return '<span class="cf-badge cf-badge--unread">New</span>';
+}
+
+function cf_single_action_buttons(array $s, string $csrf, string $basePage): string {
+    $id = (int)$s['id'];
+    $html = '<button type="button" class="cf-btn cf-btn--sm" onclick="openCfDetail(' . $id . ')">View</button>';
+    if ((int)$s['is_deleted']) {
+        $html .= ' <button type="button" class="cf-btn cf-btn--sm cf-btn--success" onclick="cfRestore(' . $id . ')">Restore</button>';
+        $html .= ' <button type="button" class="cf-btn cf-btn--sm cf-btn--danger" onclick="cfDeletePermanent(' . $id . ')">Delete</button>';
+    } else {
+        if ((int)$s['is_spam']) {
+            $html .= ' <button type="button" class="cf-btn cf-btn--sm cf-btn--success" onclick="cfMarkNotSpam(' . $id . ')">Not Spam</button>';
+        } else {
+            if ((int)$s['is_read']) {
+                $html .= ' <button type="button" class="cf-btn cf-btn--sm" onclick="cfMarkUnread(' . $id . ')">Unread</button>';
+            } else {
+                $html .= ' <button type="button" class="cf-btn cf-btn--sm cf-btn--success" onclick="cfMarkRead(' . $id . ')">Read</button>';
+            }
+            $html .= ' <button type="button" class="cf-btn cf-btn--sm cf-btn--warning" onclick="cfMarkSpam(' . $id . ')">Spam</button>';
+        }
+        $html .= ' <button type="button" class="cf-btn cf-btn--sm cf-btn--danger" onclick="cfMoveTrash(' . $id . ')">Trash</button>';
+    }
+    return $html;
+}
+
+function cf_bulk_options(string $statusFilter): string {
+    if ($statusFilter === 'trash') {
+        return '<option value="">-- Bulk action --</option>'
+             . '<option value="restore">Restore</option>'
+             . '<option value="delete_permanent">Delete permanently</option>';
+    }
+    $opts = '<option value="">-- Bulk action --</option>'
+          . '<option value="mark_read">Mark as read</option>'
+          . '<option value="mark_unread">Mark as unread</option>'
+          . '<option value="mark_spam">Mark as spam</option>';
+    if ($statusFilter === 'spam') {
+        $opts .= '<option value="mark_not_spam">Mark as not spam</option>';
+    }
+    $opts .= '<option value="move_trash">Move to trash</option>'
+           . '<optgroup label="Export / Print">'
+           . '<option value="export">Export Selected (Excel)</option>'
+           . '<option value="print">Print Selected</option>'
+           . '</optgroup>';
+    return $opts;
 }
 ?>
 <div class="cf-admin">
@@ -258,9 +366,7 @@ function cf_s(string $text): string {
         <span>Select all</span>
       </label>
       <select name="bulk_action" class="inpud">
-        <option value="">-- Bulk action --</option>
-        <option value="mark_read">Mark as read</option>
-        <option value="delete">Delete selected</option>
+        <?= cf_bulk_options($statusFilter) ?>
       </select>
       <button type="submit" class="adam-button" id="cf-bulk-apply">Apply</button>
       <span class="cf-bulkbar__count"><span id="cf-selected-count">0</span> selected</span>
@@ -284,25 +390,17 @@ function cf_s(string $text): string {
         </thead>
         <tbody>
           <?php foreach ($submissions as $s): ?>
-            <tr class="<?= (int)$s['is_read'] ? 'cf-row--read' : 'cf-row--unread' ?>">
+            <tr class="<?= (int)$s['is_deleted'] ? 'cf-row--trash' : ((int)$s['is_spam'] ? 'cf-row--spam' : ((int)$s['is_read'] ? 'cf-row--read' : 'cf-row--unread')) ?>">
               <td class="cf-table__check">
                 <input type="checkbox" name="selected_ids[]" value="<?= (int)$s['id'] ?>" class="cf-row-check">
               </td>
-              <td>
-                <span class="cf-badge cf-badge--<?= (int)$s['is_read'] ? 'read' : 'unread' ?>">
-                  <?= (int)$s['is_read'] ? 'Read' : 'New' ?>
-                </span>
-              </td>
+              <td><?= cf_status_badge($s) ?></td>
               <td><?= cf_s($s['name']) ?></td>
               <td><?= cf_s($s['contact']) ?></td>
               <td><?= cf_s(mb_strimwidth((string)$s['message'], 0, 80, '...')) ?></td>
               <td><?= cf_s($s['created_at']) ?></td>
               <td class="cf-table__actions">
-                <button type="button" class="cf-btn cf-btn--sm" onclick="openCfDetail(<?= (int)$s['id'] ?>)">View</button>
-                <?php if (!(int)$s['is_read']): ?>
-                  <button type="button" class="cf-btn cf-btn--sm cf-btn--success" onclick="cfMarkRead(<?= (int)$s['id'] ?>)">Mark Read</button>
-                <?php endif; ?>
-                <button type="button" class="cf-btn cf-btn--sm cf-btn--danger" onclick="cfDelete(<?= (int)$s['id'] ?>)">Delete</button>
+                <?= cf_single_action_buttons($s, $csrf, $basePage) ?>
               </td>
             </tr>
           <?php endforeach; ?>
@@ -320,15 +418,20 @@ function cf_s(string $text): string {
     <?php endif; ?>
   <?php endif; ?>
   </form>
-
-  <!-- Hidden forms for single actions via JS -->
-  <form method="post" action="<?= cf_filter_url([]) ?>" id="cf-single-form" style="display:none">
-    <input type="hidden" name="csrf_token" value="<?= cf_s($csrf) ?>">
-    <input type="hidden" name="id" id="cf-single-id" value="">
-    <input type="hidden" name="mark_read" id="cf-single-mark-read" value="">
-    <input type="hidden" name="delete" id="cf-single-delete" value="">
-  </form>
 </div>
+
+<!-- Hidden form for single actions -->
+<form method="post" action="<?= cf_filter_url([]) ?>" id="cf-single-form" style="display:none">
+  <input type="hidden" name="csrf_token" value="<?= cf_s($csrf) ?>">
+  <input type="hidden" name="id" id="cf-single-id" value="">
+  <input type="hidden" name="mark_read" id="cf-single-mark-read" value="">
+  <input type="hidden" name="mark_unread" id="cf-single-mark-unread" value="">
+  <input type="hidden" name="mark_spam" id="cf-single-mark-spam" value="">
+  <input type="hidden" name="mark_not_spam" id="cf-single-mark-not-spam" value="">
+  <input type="hidden" name="move_trash" id="cf-single-move-trash" value="">
+  <input type="hidden" name="restore" id="cf-single-restore" value="">
+  <input type="hidden" name="delete_permanent" id="cf-single-delete-permanent" value="">
+</form>
 
 <!-- Modal: Form Builder -->
 <div id="cf-modal-builder" class="cf-modal" onclick="closeCfModalOnBackdrop(event)">
@@ -425,11 +528,11 @@ function cf_s(string $text): string {
           <span class="cf-field__label">Role-based Override</span>
           <div class="cf-checklist">
             <label class="cf-check">
-              <input type="checkbox" name="access_roles[]" value="editor" <?= in_array('editor', $accessConfig['roles'], true) ? 'checked' : '' ?>
+              <input type="checkbox" name="access_roles[]" value="editor" <?= in_array('editor', $accessConfig['roles'], true) ? 'checked' : '' ?>>
               <span>All Editors</span>
             </label>
             <label class="cf-check">
-              <input type="checkbox" name="access_roles[]" value="author" <?= in_array('author', $accessConfig['roles'], true) ? 'checked' : '' ?>
+              <input type="checkbox" name="access_roles[]" value="author" <?= in_array('author', $accessConfig['roles'], true) ? 'checked' : '' ?>>
               <span>All Authors</span>
             </label>
           </div>
@@ -456,8 +559,8 @@ function cf_s(string $text): string {
             <div class="cf-dual-list__col">
               <div class="cf-dual-list__label">Has Access</div>
               <select name="access_users[]" class="inpud cf-dual-list__select" multiple size="9" id="access-right">
-              <?php foreach ($allUsers as $u): ?>
-                <?php if (in_array((int)$u['id'], $accessConfig['users'], true)): ?>
+                <?php foreach ($allUsers as $u): ?>
+                  <?php if (in_array((int)$u['id'], $accessConfig['users'], true)): ?>
                   <option value="<?= (int)$u['id'] ?>"><?= cf_s(($u['name'] ?? '') !== '' ? $u['name'] : $u['email']) ?> (<?= cf_s($u['email']) ?>, <?= cf_s(ucfirst($u['role'] ?? '')) ?>)</option>
                   <?php endif; ?>
                 <?php endforeach; ?>
@@ -506,16 +609,22 @@ function cf_s(string $text): string {
 .cf-table__actions { width: 1%; white-space: nowrap; }
 .cf-row--unread { background: rgba(59, 130, 246, .04); }
 .cf-row--read { background: transparent; }
+.cf-row--spam { background: rgba(234, 179, 8, .06); }
+.cf-row--trash { background: rgba(107, 114, 128, .04); }
 .cf-badge { display: inline-flex; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 600; }
 .cf-badge--unread { background: rgba(59, 130, 246, .12); color: #2563eb; }
 .cf-badge--read { background: rgba(107, 114, 128, .12); color: #6b7280; }
+.cf-badge--spam { background: rgba(234, 179, 8, .15); color: #a16207; }
+.cf-badge--trash { background: rgba(220, 38, 38, .10); color: #991b1b; }
 .cf-btn { border: 1px solid var(--adam-border); border-radius: 6px; padding: .35rem .65rem; background: #fff; color: var(--adam-text); font-size: .8rem; cursor: pointer; transition: background .15s; }
 .cf-btn:hover { background: var(--adam-hover); }
 .cf-btn--sm { padding: .25rem .5rem; font-size: .75rem; }
 .cf-btn--secondary { background: var(--adam-card); }
 .cf-btn--success { border-color: rgba(30, 143, 74, .3); color: #15803d; }
+.cf-btn--warning { border-color: rgba(234, 179, 8, .4); color: #a16207; }
 .cf-btn--danger { border-color: rgba(220, 38, 38, .2); color: #b91c1c; }
 .cf-btn--success:hover { background: rgba(30, 143, 74, .08); }
+.cf-btn--warning:hover { background: rgba(234, 179, 8, .08); }
 .cf-btn--danger:hover { background: rgba(220, 38, 38, .08); }
 .cf-pagination { display: flex; gap: .35rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
 .cf-page { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 .5rem; border-radius: 8px; font-size: .85rem; text-decoration: none; color: var(--adam-text); border: 1px solid var(--adam-border); background: var(--adam-card); }
@@ -636,7 +745,13 @@ function openCfDetail(id){
   var body = document.getElementById('cf-detail-body');
   var data = {};
   try { data = JSON.parse(s.data_json || '{}'); } catch(e){}
-  var html = '<div class="cf-detail-grid">';
+  var csrf = (document.querySelector('[name="csrf_token"]') || {}).value || '';
+  var base = '?page=admin/tools/contact-form';
+  var html = '<div class="cf-detail-actions" style="margin-bottom:1rem;display:flex;gap:.5rem;">';
+  html += '<a class="cf-btn cf-btn--sm" href="' + base + '&action=print&type=detail&id=' + s.id + '&csrf_token=' + encodeURIComponent(csrf) + '" target="_blank">Print</a>';
+  html += '<a class="cf-btn cf-btn--sm" href="' + base + '&action=export&type=detail&id=' + s.id + '&csrf_token=' + encodeURIComponent(csrf) + '">Export Excel</a>';
+  html += '</div>';
+  html += '<div class="cf-detail-grid">';
   cfFields.forEach(function(f){
     html += '<div class="cf-detail-item"><div class="cf-detail-label">' + (f.label || f.key) + '</div><div class="cf-detail-value">' + (data[f.key] || '-') + '</div></div>';
   });
@@ -646,21 +761,21 @@ function openCfDetail(id){
   openCfModal('cf-modal-detail');
 }
 
-function cfMarkRead(id){
-  if (!confirm('Mark this submission as read?')) return;
+function cfSingleSubmit(id, field){
   document.getElementById('cf-single-id').value = id;
-  document.getElementById('cf-single-mark-read').value = '1';
-  document.getElementById('cf-single-delete').value = '';
+  ['mark_read','mark_unread','mark_spam','mark_not_spam','move_trash','restore','delete_permanent'].forEach(function(k){
+    document.getElementById('cf-single-' + k.replace(/_/g, '-')).value = '';
+  });
+  document.getElementById('cf-single-' + field.replace(/_/g, '-')).value = '1';
   document.getElementById('cf-single-form').submit();
 }
-
-function cfDelete(id){
-  if (!confirm('Delete this submission permanently?')) return;
-  document.getElementById('cf-single-id').value = id;
-  document.getElementById('cf-single-mark-read').value = '';
-  document.getElementById('cf-single-delete').value = '1';
-  document.getElementById('cf-single-form').submit();
-}
+function cfMarkRead(id){ if (confirm('Mark as read?')) cfSingleSubmit(id, 'mark_read'); }
+function cfMarkUnread(id){ if (confirm('Mark as unread?')) cfSingleSubmit(id, 'mark_unread'); }
+function cfMarkSpam(id){ if (confirm('Mark as spam?')) cfSingleSubmit(id, 'mark_spam'); }
+function cfMarkNotSpam(id){ if (confirm('Mark as not spam?')) cfSingleSubmit(id, 'mark_not_spam'); }
+function cfMoveTrash(id){ if (confirm('Move to trash?')) cfSingleSubmit(id, 'move_trash'); }
+function cfRestore(id){ if (confirm('Restore this submission?')) cfSingleSubmit(id, 'restore'); }
+function cfDeletePermanent(id){ if (confirm('Delete permanently?')) cfSingleSubmit(id, 'delete_permanent'); }
 
 function cfSaveRecaptcha(){
   var fd = new FormData();
@@ -677,19 +792,13 @@ function cfSaveRecaptcha(){
 function cfMoveRight(){
   var left = document.getElementById('access-left');
   var right = document.getElementById('access-right');
-  Array.from(left.selectedOptions).forEach(function(opt){
-    opt.selected = false;
-    right.appendChild(opt);
-  });
+  Array.from(left.selectedOptions).forEach(function(opt){ opt.selected = false; right.appendChild(opt); });
 }
 
 function cfMoveLeft(){
   var left = document.getElementById('access-left');
   var right = document.getElementById('access-right');
-  Array.from(right.selectedOptions).forEach(function(opt){
-    opt.selected = false;
-    left.appendChild(opt);
-  });
+  Array.from(right.selectedOptions).forEach(function(opt){ opt.selected = false; left.appendChild(opt); });
 }
 
 function cfSaveAccess(){
@@ -731,9 +840,25 @@ document.querySelector('[onclick*="openCfModal(\'cf-modal-builder\')"]').addEven
     bulkForm.addEventListener('submit', function(e){
       var action = (bulkForm.querySelector('[name="bulk_action"]') || {}).value;
       if (!action) { e.preventDefault(); return false; }
-      var selected = document.querySelectorAll('.cf-row-check:checked').length;
-      if (!selected) { e.preventDefault(); alert('No submissions selected.'); return false; }
-      if (action === 'delete' && !confirm('Delete selected submissions permanently?')) {
+      var selected = [];
+      document.querySelectorAll('.cf-row-check:checked').forEach(function(cb){ selected.push(cb.value); });
+      if (!selected.length) { e.preventDefault(); alert('No submissions selected.'); return false; }
+      if (action === 'export' || action === 'print') {
+        e.preventDefault();
+        var csrf = (bulkForm.querySelector('[name="csrf_token"]') || {}).value || '';
+        var url = '?page=admin/tools/contact-form'
+          + '&action=' + action
+          + '&type=list'
+          + '&ids=' + encodeURIComponent(selected.join(','))
+          + '&csrf_token=' + encodeURIComponent(csrf);
+        if (action === 'print') {
+          window.open(url, '_blank');
+        } else {
+          window.location.href = url;
+        }
+        return false;
+      }
+      if (action === 'delete_permanent' && !confirm('Delete selected submissions permanently?')) {
         e.preventDefault(); return false;
       }
     });

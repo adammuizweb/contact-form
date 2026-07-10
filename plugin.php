@@ -39,12 +39,23 @@ function cf_ensure_schema(PDO $pdo): void {
             `data_json` longtext DEFAULT NULL,
             `ip` varchar(45) DEFAULT NULL,
             `is_read` tinyint(1) NOT NULL DEFAULT 0,
+            `is_spam` tinyint(1) NOT NULL DEFAULT 0,
+            `is_deleted` tinyint(1) NOT NULL DEFAULT 0,
             `created_at` datetime NOT NULL DEFAULT current_timestamp(),
             PRIMARY KEY (`id`),
             KEY `created_at` (`created_at`),
-            KEY `is_read` (`is_read`)
+            KEY `is_read` (`is_read`),
+            KEY `is_spam` (`is_spam`),
+            KEY `is_deleted` (`is_deleted`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+    // idempotent migrations for existing tables
+    try {
+        $pdo->exec("ALTER TABLE `contact_submissions` ADD COLUMN IF NOT EXISTS `is_spam` tinyint(1) NOT NULL DEFAULT 0 AFTER `is_read`");
+        $pdo->exec("ALTER TABLE `contact_submissions` ADD COLUMN IF NOT EXISTS `is_deleted` tinyint(1) NOT NULL DEFAULT 0 AFTER `is_spam`");
+    } catch (Throwable $e) {
+        // ignore if syntax unsupported or already exists
+    }
 }
 
 function cf_default_fields(): array {
@@ -165,6 +176,18 @@ function cf_current_user_can_access(PDO $pdo): bool {
 }
 
 add_action('admin_init', function (): void {
+    $pluginDir = defined('PLUGIN_PATH') ? PLUGIN_PATH . '/contact-form' : __DIR__;
+    $vendorAutoload = $pluginDir . '/vendor/autoload.php';
+    $composerJson = $pluginDir . '/composer.json';
+    if (!is_file($vendorAutoload) && is_file($composerJson) && function_exists('shell_exec')) {
+        $lockFile = $pluginDir . '/.composer_installed';
+        if (!is_file($lockFile)) {
+            $cmd = sprintf('cd %s && composer install --no-dev --prefer-dist --no-interaction --no-cache 2>&1', escapeshellarg($pluginDir));
+            $out = shell_exec($cmd);
+            file_put_contents($lockFile, (string)($out ?: 'done'));
+        }
+    }
+
     $pdo = $GLOBALS['pdo'] ?? null;
     if (!($pdo instanceof PDO)) return;
     cf_get_secret($pdo);
