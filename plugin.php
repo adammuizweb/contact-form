@@ -14,6 +14,10 @@ if (function_exists('register_frontend_route')) {
 // Settings keys
 const CF_FORM_FIELDS_KEY = 'contact_form_fields';
 const CF_SECRET_KEY = 'contact_form_secret';
+const CF_RECAPTCHA_ENABLED_KEY = 'contact_form_recaptcha_enabled';
+const CF_RECAPTCHA_SITEKEY_KEY = 'contact_form_recaptcha_sitekey';
+const CF_RECAPTCHA_SECRET_KEY = 'contact_form_recaptcha_secret';
+const CF_ACCESS_CONFIG_KEY = 'contact_form_access_config';
 
 function cf_get_secret(PDO $pdo): string {
     $secret = settings_get($pdo, CF_SECRET_KEY, '');
@@ -87,6 +91,79 @@ function cf_save_fields(PDO $pdo, array $fields): bool {
     return settings_set($pdo, CF_FORM_FIELDS_KEY, json_encode($fields, JSON_UNESCAPED_UNICODE), 1);
 }
 
+function cf_recaptcha_enabled(PDO $pdo): bool {
+    return (function_exists('settings_get') ? settings_get($pdo, CF_RECAPTCHA_ENABLED_KEY, '0') : '0') === '1';
+}
+
+function cf_recaptcha_keys(PDO $pdo): array {
+    return [
+        'sitekey' => (string)(function_exists('settings_get') ? settings_get($pdo, CF_RECAPTCHA_SITEKEY_KEY, '') : ''),
+        'secret'  => (string)(function_exists('settings_get') ? settings_get($pdo, CF_RECAPTCHA_SECRET_KEY, '') : ''),
+    ];
+}
+
+function cf_recaptcha_verify(string $secret, string $token, string $remoteIp = ''): array {
+    $token = trim($token);
+    if ($token === '') return ['ok' => false, 'error' => 'Missing recaptcha token'];
+
+    $post = http_build_query(['secret' => $secret, 'response' => $token, 'remoteip' => $remoteIp]);
+    $resp = null;
+    if (function_exists('curl_init')) {
+        $ch = curl_init('https://www.google.com/recaptcha/api/siteverify');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $post);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $resp = curl_exec($ch);
+        curl_close($ch);
+    } else {
+        $ctx = stream_context_create([
+            'http' => [
+                'method'  => 'POST',
+                'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
+                'content' => $post,
+                'timeout' => 10,
+            ]
+        ]);
+        $resp = @file_get_contents('https://www.google.com/recaptcha/api/siteverify', false, $ctx);
+    }
+
+    if (!is_string($resp) || $resp === '') return ['ok' => false, 'error' => 'recaptcha verify failed'];
+    $j = json_decode($resp, true);
+    if (!is_array($j)) return ['ok' => false, 'error' => 'Invalid recaptcha response'];
+    if (empty($j['success'])) return ['ok' => false, 'error' => 'recaptcha failed', 'raw' => $j];
+    return ['ok' => true, 'raw' => $j];
+}
+
+function cf_access_config(PDO $pdo): array {
+    $default = json_encode(['roles' => ['admin'], 'users' => []], JSON_UNESCAPED_UNICODE);
+    $raw = function_exists('settings_get') ? settings_get($pdo, CF_ACCESS_CONFIG_KEY, $default) : $default;
+    if (!is_string($raw) || $raw === '') $raw = $default;
+    $cfg = json_decode($raw, true);
+    if (!is_array($cfg)) $cfg = [];
+    $cfg['roles'] = isset($cfg['roles']) && is_array($cfg['roles']) ? array_values(array_filter(array_map('strval', $cfg['roles']))) : ['admin'];
+    $cfg['users'] = isset($cfg['users']) && is_array($cfg['users']) ? array_values(array_filter(array_map('intval', $cfg['users']))) : [];
+    return $cfg;
+}
+
+function cf_save_access_config(PDO $pdo, array $cfg): bool {
+    if (!function_exists('settings_set')) return false;
+    $cfg['roles'] = array_values(array_filter(array_map('strval', $cfg['roles'] ?? [])));
+    $cfg['users'] = array_values(array_filter(array_map('intval', $cfg['users'] ?? [])));
+    return settings_set($pdo, CF_ACCESS_CONFIG_KEY, json_encode($cfg, JSON_UNESCAPED_UNICODE), 1);
+}
+
+function cf_current_user_can_access(PDO $pdo): bool {
+    if (!function_exists('current_user_role') || !function_exists('current_user_id')) return true;
+    $userRole = current_user_role($pdo);
+    $userId = current_user_id();
+    $cfg = cf_access_config($pdo);
+    if ($userRole === 'admin') return true;
+    if (in_array($userRole, $cfg['roles'], true)) return true;
+    if (in_array((int)$userId, $cfg['users'], true)) return true;
+    return false;
+}
+
 add_action('admin_init', function (): void {
     $pdo = $GLOBALS['pdo'] ?? null;
     if (!($pdo instanceof PDO)) return;
@@ -101,4 +178,8 @@ add_action('plugin_uninstall', function (string $name): void {
     $pdo->exec('DROP TABLE IF EXISTS `contact_submissions`');
     settings_set($pdo, CF_SECRET_KEY, '', 1);
     settings_set($pdo, CF_FORM_FIELDS_KEY, '', 1);
+    settings_set($pdo, CF_RECAPTCHA_ENABLED_KEY, '0', 1);
+    settings_set($pdo, CF_RECAPTCHA_SITEKEY_KEY, '', 1);
+    settings_set($pdo, CF_RECAPTCHA_SECRET_KEY, '', 1);
+    settings_set($pdo, CF_ACCESS_CONFIG_KEY, '', 1);
 });

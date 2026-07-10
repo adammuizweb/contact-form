@@ -21,6 +21,24 @@ if (!cf_csrf_check($ctx['csrf'], $csrf)) {
     exit('Invalid CSRF');
 }
 
+$recaptchaEnabled = cf_recaptcha_enabled($pdo);
+if ($recaptchaEnabled) {
+    $keys = cf_recaptcha_keys($pdo);
+    $token = trim((string)($_POST['g-recaptcha-response'] ?? ''));
+    $rc = cf_recaptcha_verify($keys['secret'], $token, $ctx['ip']);
+    if (!$rc['ok']) {
+        http_response_code(400);
+        exit('reCAPTCHA failed');
+    }
+}
+
+// Basic rate limit: max 5 submissions per IP per hour
+$rateOk = cf_rate_limit_check($pdo, $ctx['ip'], 'submit', 3600, 5);
+if (!$rateOk) {
+    http_response_code(429);
+    exit('Too many submissions. Please try again later.');
+}
+
 $fields = cf_get_fields($pdo);
 $visibleFields = array_values(array_filter($fields, function ($f) { return empty($f['hidden']); }));
 

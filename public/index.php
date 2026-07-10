@@ -33,7 +33,11 @@ $csrfJs = json_encode($ctx['csrf'], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICOD
 $fields = cf_get_fields($pdo);
 $visibleFields = array_values(array_filter($fields, function ($f) { return empty($f['hidden']); }));
 
-function cf_render_field(array $f, string $csrfEsc): string {
+$recaptcha = cf_recaptcha_keys($pdo);
+$recaptchaEnabled = cf_recaptcha_enabled($pdo);
+$siteKeyEsc = htmlspecialchars($recaptcha['sitekey'], ENT_QUOTES, 'UTF-8');
+
+function cf_render_field(array $f): string {
     $label = htmlspecialchars($f['label'] ?: $f['key'], ENT_QUOTES, 'UTF-8');
     $name = htmlspecialchars($f['key'], ENT_QUOTES, 'UTF-8');
     $required = !empty($f['required']) ? ' required' : '';
@@ -51,12 +55,19 @@ function cf_render_field(array $f, string $csrfEsc): string {
     </label>';
 }
 
-$fieldsHtml = implode("\n", array_map(function ($f) use ($csrfEsc) { return cf_render_field($f, $csrfEsc); }, $visibleFields));
+$fieldsHtml = implode("\n", array_map(function ($f) { return cf_render_field($f); }, $visibleFields));
 
 $page_title = 'Contact';
 $context_for_layout = 'main.contact';
 $enable_sidebar = false;
 $layout_full_width = false;
+
+$recaptchaDiv = '';
+$recaptchaScript = '';
+if ($recaptchaEnabled && $siteKeyEsc !== '') {
+    $recaptchaDiv = '<div class="cf-captcha"><div class="g-recaptcha" data-sitekey="' . $siteKeyEsc . '" data-callback="cfRecaptchaOk" data-expired-callback="cfRecaptchaExpired"></div></div>';
+    $recaptchaScript = '<script src="https://www.google.com/recaptcha/api.js" async defer></script>';
+}
 
 $content_html = <<< 'HTML'
 <section class="cf-section">
@@ -70,6 +81,7 @@ $content_html = <<< 'HTML'
     <form class="cf-form" id="cfForm" method="post" action="/contact/submit" novalidate>
       <input type="hidden" name="csrf_token" value="__CSRF_ESC__">
       __FIELDS__
+      __RECAPTCHA_DIV__
 
       <button class="cf-submit" type="submit">Send Message</button>
       <div class="cf-hint" id="cfHint"></div>
@@ -77,6 +89,7 @@ $content_html = <<< 'HTML'
   </div>
 </section>
 
+__RECAPTCHA_SCRIPT__
 <style>
 .cf-section {
   --cf-primary: 43 122 74;
@@ -127,6 +140,7 @@ $content_html = <<< 'HTML'
 }
 .cf-input:focus { border-color: rgb(var(--cf-primary)); box-shadow: 0 0 0 4px rgb(var(--cf-primary) / .12); }
 .cf-input:hover { border-color: rgb(var(--cf-primary) / .6); }
+.cf-captcha { display: flex; justify-content: center; }
 .cf-submit {
   width: 100%;
   border: 0;
@@ -154,13 +168,26 @@ $content_html = <<< 'HTML'
   const CSRF = __CSRF_JS__;
   const form = document.getElementById('cfForm');
   const hint = document.getElementById('cfHint');
+  let recaptchaValid = false;
+  window.cfRecaptchaOk = function() { recaptchaValid = true; };
+  window.cfRecaptchaExpired = function() { recaptchaValid = false; };
   if (!form) return;
+
   form.addEventListener('submit', async function(e){
     e.preventDefault();
     hint.textContent = 'Sending...';
     hint.className = 'cf-hint';
     const btn = form.querySelector('button[type="submit"]');
     btn.disabled = true;
+
+    const recaptchaPresent = !!form.querySelector('.g-recaptcha');
+    if (recaptchaPresent && !recaptchaValid) {
+      hint.textContent = 'Please complete the reCAPTCHA.';
+      hint.className = 'cf-hint cf-hint--error';
+      btn.disabled = false;
+      return;
+    }
+
     try {
       const fd = new FormData(form);
       const r = await fetch('/contact/submit', { method: 'POST', body: fd });
@@ -169,9 +196,12 @@ $content_html = <<< 'HTML'
         hint.textContent = 'Message sent successfully.';
         hint.className = 'cf-hint cf-hint--ok';
         form.reset();
+        recaptchaValid = false;
+        if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
       } else {
         hint.textContent = text || 'Failed to send.';
         hint.className = 'cf-hint cf-hint--error';
+        if (recaptchaPresent && typeof grecaptcha !== 'undefined') grecaptcha.reset();
       }
     } catch (err) {
       hint.textContent = 'Network error. Please try again.';
@@ -184,6 +214,6 @@ $content_html = <<< 'HTML'
 </script>
 HTML;
 
-$content_html = str_replace(['__CSRF_ESC__', '__FIELDS__', '__CSRF_JS__'], [$csrfEsc, $fieldsHtml, $csrfJs], $content_html);
+$content_html = str_replace(['__CSRF_ESC__', '__FIELDS__', '__CSRF_JS__', '__RECAPTCHA_DIV__', '__RECAPTCHA_SCRIPT__'], [$csrfEsc, $fieldsHtml, $csrfJs, $recaptchaDiv, $recaptchaScript], $content_html);
 
 require_once $publicRoot . '/app/layout.php';
