@@ -761,21 +761,34 @@ function openCfDetail(id){
   openCfModal('cf-modal-detail');
 }
 
-function cfSingleSubmit(id, field){
-  document.getElementById('cf-single-id').value = id;
-  ['mark_read','mark_unread','mark_spam','mark_not_spam','move_trash','restore','delete_permanent'].forEach(function(k){
-    document.getElementById('cf-single-' + k.replace(/_/g, '-')).value = '';
-  });
-  document.getElementById('cf-single-' + field.replace(/_/g, '-')).value = '1';
-  document.getElementById('cf-single-form').submit();
+function cfSingleSubmit(id, field, confirmMsg){
+  if (confirmMsg && !confirm(confirmMsg)) return;
+  var form = document.getElementById('cf-single-form');
+  var fd = new FormData();
+  fd.append('csrf_token', form.querySelector('[name="csrf_token"]').value);
+  fd.append('id', id);
+  fd.append(field, '1');
+  var redirect = {
+    'mark_read': '?page=admin/tools/contact-form&status=read',
+    'mark_unread': '?page=admin/tools/contact-form&status=unread',
+    'mark_spam': '?page=admin/tools/contact-form&status=spam',
+    'mark_not_spam': '?page=admin/tools/contact-form&status=unread',
+    'move_trash': '?page=admin/tools/contact-form&status=trash',
+    'restore': '?page=admin/tools/contact-form&status=all',
+    'delete_permanent': '?page=admin/tools/contact-form&status=trash'
+  }[field] || '?page=admin/tools/contact-form';
+  fetch(form.getAttribute('action') || '?page=admin/tools/contact-form', { method: 'POST', body: fd, credentials: 'same-origin' })
+    .then(function(r){ return r.text(); })
+    .then(function(){ location.replace(redirect); })
+    .catch(function(){ alert('Action failed. Please try again.'); });
 }
-function cfMarkRead(id){ if (confirm('Mark as read?')) cfSingleSubmit(id, 'mark_read'); }
-function cfMarkUnread(id){ if (confirm('Mark as unread?')) cfSingleSubmit(id, 'mark_unread'); }
-function cfMarkSpam(id){ if (confirm('Mark as spam?')) cfSingleSubmit(id, 'mark_spam'); }
-function cfMarkNotSpam(id){ if (confirm('Mark as not spam?')) cfSingleSubmit(id, 'mark_not_spam'); }
-function cfMoveTrash(id){ if (confirm('Move to trash?')) cfSingleSubmit(id, 'move_trash'); }
-function cfRestore(id){ if (confirm('Restore this submission?')) cfSingleSubmit(id, 'restore'); }
-function cfDeletePermanent(id){ if (confirm('Delete permanently?')) cfSingleSubmit(id, 'delete_permanent'); }
+function cfMarkRead(id){ cfSingleSubmit(id, 'mark_read', 'Mark as read?'); }
+function cfMarkUnread(id){ cfSingleSubmit(id, 'mark_unread', 'Mark as unread?'); }
+function cfMarkSpam(id){ cfSingleSubmit(id, 'mark_spam', 'Mark as spam?'); }
+function cfMarkNotSpam(id){ cfSingleSubmit(id, 'mark_not_spam', 'Mark as not spam?'); }
+function cfMoveTrash(id){ cfSingleSubmit(id, 'move_trash', 'Move to trash?'); }
+function cfRestore(id){ cfSingleSubmit(id, 'restore', 'Restore this submission?'); }
+function cfDeletePermanent(id){ cfSingleSubmit(id, 'delete_permanent', 'Delete permanently?'); }
 
 function cfSaveRecaptcha(){
   var fd = new FormData();
