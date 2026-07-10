@@ -1,0 +1,34 @@
+{
+  "name": "contact-form",
+  "version": "1.0.0",
+  "title": "Contact Form",
+  "icon": "icon.png",
+  "description": "Customizable contact form with form builder and database storage.",
+  "author": "Adam Muiz",
+  "author_uri": "https://jyavani.com/member/adammuiz/",
+  "plugin_uri": "https://apu.lan/contact/",
+  "homepage": "https://apu.lan/contact/",
+  "requires": {
+    "php": ">=8.1",
+    "extensions": ["pdo", "json"]
+  },
+  "admin": {
+    "pages": [
+      {
+        "route": "admin/tools/contact-form",
+        "file": "admin/index.php",
+        "title": "Contact Submissions",
+        "roles": ["admin"]
+      }
+    ],
+    "nav": [
+      {
+        "label": "Contact Form",
+        "icon": "message-square",
+        "page": "admin/tools/contact-form",
+        "parent": "tools",
+        "roles": ["admin"]
+      }
+    ]
+  }
+}
