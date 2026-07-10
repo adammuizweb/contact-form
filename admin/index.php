@@ -205,9 +205,9 @@ try {
 }
 
 // ---- Filter / Search / Pagination ----
-$statusFilter = $_GET['status'] ?? 'all';
-$allowedFilters = ['all', 'unread', 'read', 'spam', 'trash'];
-if (!in_array($statusFilter, $allowedFilters, true)) $statusFilter = 'all';
+$statusFilter = $_GET['status'] ?? 'unread';
+$allowedFilters = ['unread', 'read', 'spam', 'trash', 'all'];
+if (!in_array($statusFilter, $allowedFilters, true)) $statusFilter = 'unread';
 $search = trim((string)($_GET['q'] ?? ''));
 
 $where = "WHERE 1=1";
@@ -338,38 +338,44 @@ function cf_bulk_options(string $statusFilter): string {
     <div class="cf-alert cf-alert--success"><?= cf_s($saveMessage) ?></div>
   <?php endif; ?>
 
-  <div class="cf-toolbar">
-    <div class="cf-tabs">
-      <?php foreach ($allowedFilters as $sf): ?>
-        <a href="<?= cf_filter_url(['status' => $sf, 'p' => 1]) ?>"
-           class="cf-tab<?= $statusFilter === $sf ? ' cf-tab--active' : '' ?>">
-          <?= cf_s($filterLabels[$sf] ?? ucfirst($sf)) ?>
-        </a>
-      <?php endforeach; ?>
-    </div>
-    <form class="cf-search" method="get" action="">
-      <input type="hidden" name="page" value="admin/tools/contact-form">
-      <input type="hidden" name="status" value="<?= cf_s($statusFilter) ?>">
-      <input type="search" name="q" class="inpud" value="<?= cf_s($search) ?>" placeholder="Search name, contact, message...">
-      <button type="submit" class="adam-button">Search</button>
-      <?php if ($search !== ''): ?>
-        <a class="adam-cancle" href="<?= cf_filter_url(['q' => '', 'p' => 1]) ?>">Clear</a>
-      <?php endif; ?>
-    </form>
-  </div>
-
   <form method="post" action="<?= cf_filter_url([]) ?>" id="cf-bulk-form">
     <input type="hidden" name="csrf_token" value="<?= cf_s($csrf) ?>">
-    <div class="cf-bulkbar">
-      <label class="cf-check">
-        <input type="checkbox" id="cf-select-all" title="Select all on this page">
-        <span>Select all</span>
-      </label>
-      <select name="bulk_action" class="inpud">
-        <?= cf_bulk_options($statusFilter) ?>
-      </select>
-      <button type="submit" class="adam-button" id="cf-bulk-apply">Apply</button>
-      <span class="cf-bulkbar__count"><span id="cf-selected-count">0</span> selected</span>
+
+    <div class="cf-toolbar">
+      <div class="cf-toolbar__col cf-toolbar__col--filter">
+        <select id="cf-status-select" class="inpud" aria-label="Filter status">
+          <?php foreach ($allowedFilters as $sf): ?>
+            <option value="<?= cf_filter_url(['status' => $sf, 'p' => 1]) ?>" <?= $statusFilter === $sf ? 'selected' : '' ?>>
+              <?= cf_s($filterLabels[$sf] ?? ucfirst($sf)) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+
+      <div class="cf-toolbar__col cf-toolbar__col--bulk">
+        <label class="cf-check" title="Select all on this page">
+          <input type="checkbox" id="cf-select-all">
+        </label>
+        <select name="bulk_action" class="inpud">
+          <?= cf_bulk_options($statusFilter) ?>
+        </select>
+        <button type="submit" class="adam-button" id="cf-bulk-apply">Apply</button>
+        <span class="cf-bulkbar__count"><span id="cf-selected-count">0</span> selected</span>
+      </div>
+
+      <div class="cf-toolbar__col cf-toolbar__col--search">
+        <div class="cf-search">
+          <button type="button" class="cf-search__btn" id="cf-search-btn" aria-label="Search">
+            <?= svg_ico('search') ?>
+          </button>
+          <input type="search" id="cf-search-input" class="inpud" value="<?= cf_s($search) ?>" placeholder="Search name, contact, message...">
+          <?php if ($search !== ''): ?>
+            <a class="cf-search__clear" href="<?= cf_filter_url(['q' => '', 'p' => 1]) ?>" title="Clear" aria-label="Clear">
+              <?= svg_ico('circle-x') ?>
+            </a>
+          <?php endif; ?>
+        </div>
+      </div>
     </div>
 
   <?php if (empty($submissions)): ?>
@@ -585,16 +591,27 @@ function cf_bulk_options(string $statusFilter): string {
 .cf-admin__actions { display: flex; gap: .5rem; flex-wrap: wrap; }
 .cf-alert { padding: .7rem .9rem; border-radius: 8px; margin-bottom: 1rem; font-size: .9rem; background: rgba(30, 143, 74, .12); color: var(--adam-success); border: 1px solid rgba(30, 143, 74, .25); }
 .cf-empty { color: var(--adam-muted); padding: 2rem; text-align: center; }
-.cf-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
-.cf-tabs { display: flex; gap: .25rem; flex-wrap: wrap; }
-.cf-tab { display: inline-flex; padding: .45rem .85rem; border-radius: 8px; font-size: .85rem; font-weight: 600; color: var(--adam-text); text-decoration: none; border: 1px solid transparent; }
-.cf-tab:hover { background: var(--adam-hover); }
-.cf-tab--active { background: var(--adam-card); border-color: var(--adam-border); }
-.cf-search { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-.cf-search input { min-width: 220px; }
-.cf-bulkbar { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; padding: .6rem .75rem; background: var(--adam-card); border: 1px solid var(--adam-border); border-radius: 10px; flex-wrap: wrap; }
-.cf-bulkbar__count { margin-left: auto; font-size: .85rem; color: var(--adam-muted); }
-.cf-check { display: inline-flex; align-items: center; gap: .4rem; font-size: .85rem; cursor: pointer; }
+.cf-toolbar { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+.cf-toolbar__col { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.cf-toolbar__col--filter { flex: 0 0 auto; }
+.cf-toolbar__col--bulk { flex: 1 1 auto; padding: .5rem .65rem; background: var(--adam-card); border: 1px solid var(--adam-border); border-radius: 10px; flex-wrap: nowrap; }
+.cf-toolbar__col--search { flex: 0 0 240px; }
+#cf-bulk-apply { flex-shrink: 0; white-space: nowrap; }
+.cf-search { position: relative; display: flex; align-items: center; width: 100%; }
+.cf-search__btn { position: absolute; left: .45rem; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; background: transparent; color: var(--adam-muted); cursor: pointer; border-radius: 6px; }
+.cf-search__btn:hover { color: var(--adam-text); background: var(--adam-hover); }
+.cf-search__btn svg { width: 16px; height: 16px; }
+.cf-search input { width: 100%; padding-left: 2.1rem; padding-right: 2.1rem; }
+.cf-search__clear { position: absolute; right: .4rem; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; color: var(--adam-muted); text-decoration: none; border-radius: 6px; }
+.cf-search__clear:hover { background: var(--adam-hover); color: var(--adam-text); }
+.cf-search__clear svg { width: 16px; height: 16px; }
+.cf-bulkbar__count { margin-left: auto; font-size: .8rem; color: var(--adam-muted); white-space: nowrap; }
+.cf-check { display: inline-flex; align-items: center; cursor: pointer; }
+@media (max-width: 820px) {
+  .cf-toolbar { flex-wrap: wrap; }
+  .cf-toolbar__col--bulk { order: 3; flex: 1 1 100%; }
+  .cf-toolbar__col--search { flex: 1 1 100%; }
+}
 .cf-checklist { display: flex; gap: 1rem; flex-wrap: wrap; margin: .4rem 0; }
 .cf-dual-list { display: grid; grid-template-columns: 1fr auto 1fr; gap: .5rem; align-items: center; margin: .4rem 0; }
 .cf-dual-list__col { min-width: 0; }
@@ -761,8 +778,28 @@ function openCfDetail(id){
   openCfModal('cf-modal-detail');
 }
 
-function cfSingleSubmit(id, field, confirmMsg){
-  if (confirmMsg && !confirm(confirmMsg)) return;
+function cfConfirm(message, variant){
+  var v = (variant === 'danger') ? 'danger' : 'warning';
+  if (window.NewNotifConfirm && typeof window.NewNotifConfirm[v] === 'function') {
+    return window.NewNotifConfirm[v]({ message: message, focus: 'cancel' });
+  }
+  return Promise.resolve(window.confirm(message));
+}
+function cfToast(message, type){
+  type = type || 'info';
+  if (window.NewNotifToast && typeof window.NewNotifToast[type] === 'function') {
+    window.NewNotifToast[type](message);
+    return;
+  }
+  window.alert(message);
+}
+
+async function cfSingleSubmit(id, field, confirmMsg){
+  if (confirmMsg) {
+    var variant = (field === 'delete_permanent') ? 'danger' : 'warning';
+    var ok = await cfConfirm(confirmMsg, variant);
+    if (!ok) return;
+  }
   var form = document.getElementById('cf-single-form');
   var fd = new FormData();
   fd.append('csrf_token', form.querySelector('[name="csrf_token"]').value);
@@ -780,7 +817,7 @@ function cfSingleSubmit(id, field, confirmMsg){
   fetch(form.getAttribute('action') || '?page=admin/tools/contact-form', { method: 'POST', body: fd, credentials: 'same-origin' })
     .then(function(r){ return r.text(); })
     .then(function(){ location.replace(redirect); })
-    .catch(function(){ alert('Action failed. Please try again.'); });
+    .catch(function(){ cfToast('Action failed. Please try again.', 'error'); });
 }
 function cfMarkRead(id){ cfSingleSubmit(id, 'mark_read', 'Mark as read?'); }
 function cfMarkUnread(id){ cfSingleSubmit(id, 'mark_unread', 'Mark as unread?'); }
@@ -855,7 +892,7 @@ document.querySelector('[onclick*="openCfModal(\'cf-modal-builder\')"]').addEven
       if (!action) { e.preventDefault(); return false; }
       var selected = [];
       document.querySelectorAll('.cf-row-check:checked').forEach(function(cb){ selected.push(cb.value); });
-      if (!selected.length) { e.preventDefault(); alert('No submissions selected.'); return false; }
+      if (!selected.length) { e.preventDefault(); cfToast('No submissions selected.', 'warning'); return false; }
       if (action === 'export' || action === 'print') {
         e.preventDefault();
         var csrf = (bulkForm.querySelector('[name="csrf_token"]') || {}).value || '';
@@ -871,11 +908,43 @@ document.querySelector('[onclick*="openCfModal(\'cf-modal-builder\')"]').addEven
         }
         return false;
       }
-      if (action === 'delete_permanent' && !confirm('Delete selected submissions permanently?')) {
-        e.preventDefault(); return false;
+      if (action === 'delete_permanent') {
+        e.preventDefault();
+        cfConfirm('Delete ' + selected.length + ' submission(s) permanently?', 'danger').then(function(ok){
+          if (ok) HTMLFormElement.prototype.submit.call(bulkForm);
+        });
+        return false;
       }
     });
   }
   updateCount();
+})();
+
+// toolbar: status filter + search (JS navigation to avoid nested forms)
+(function(){
+  var statusSelect = document.getElementById('cf-status-select');
+  if (statusSelect) {
+    statusSelect.addEventListener('change', function(){
+      if (this.value) window.location.href = this.value;
+    });
+  }
+  var searchInput = document.getElementById('cf-search-input');
+  var searchBtn = document.getElementById('cf-search-btn');
+  function doSearch(){
+    if (!searchInput) return;
+    var url = new URL(window.location.href);
+    var q = searchInput.value.trim();
+    if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
+    url.searchParams.set('p', '1');
+    window.location.href = url.toString();
+  }
+  if (searchInput) {
+    searchInput.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); doSearch(); }
+    });
+  }
+  if (searchBtn) {
+    searchBtn.addEventListener('click', function(e){ e.preventDefault(); doSearch(); });
+  }
 })();
 </script>
