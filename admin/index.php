@@ -679,8 +679,9 @@ html.theme-dark .cf-btn:disabled { opacity: .45; }
 .cf-field-row__top { display: grid; grid-template-columns: 1fr 1fr auto; gap: .5rem; align-items: end; margin-bottom: .5rem; }
 .cf-field-row__opts { display: flex; gap: .75rem; align-items: center; font-size: .85rem; }
 .cf-field-row__actions { display: flex; gap: .3rem; }
-.cf-field-row input, .cf-field-row select { padding: .4rem .5rem; border: 1px solid var(--adam-border); border-radius: 6px; font-size: .85rem; background: #ffffff; color: #0b1220; caret-color: #0b1220; color-scheme: light; }
-html.theme-dark .cf-field-row input, html.theme-dark .cf-field-row select { background: #0e1620; color: #e6eef6; border-color: #1f2a35; caret-color: #e6eef6; color-scheme: dark; }
+.cf-field-row input, .cf-field-row select { padding: .4rem .5rem; border: 1px solid var(--adam-border); border-radius: 6px; font-size: .85rem; }
+html:not(.theme-dark) .cf-field-row input, html:not(.theme-dark) .cf-field-row select { background: #ffffff !important; color: #0b1220 !important; caret-color: #0b1220 !important; color-scheme: light !important; }
+html.theme-dark .cf-field-row input, html.theme-dark .cf-field-row select { background: #0e1620 !important; color: #e6eef6 !important; border-color: #1f2a35 !important; caret-color: #e6eef6 !important; color-scheme: dark !important; }
 .cf-field-row label { font-size: .75rem; color: var(--adam-muted); display: block; margin-bottom: .2rem; }
 .cf-field { display: grid; gap: .35rem; margin-bottom: .75rem; }
 .cf-field__label { font-size: .8rem; font-weight: 600; color: var(--adam-text); }
