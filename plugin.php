@@ -206,3 +206,18 @@ add_action('plugin_uninstall', function (string $name): void {
     settings_set($pdo, CF_RECAPTCHA_SECRET_KEY, '', 1);
     settings_set($pdo, CF_ACCESS_CONFIG_KEY, '', 1);
 });
+
+// Public form renderer (shared by the /contact/ page and the [contact_form] shortcode)
+require_once __DIR__ . '/public/form.php';
+
+// Shortcode: [contact_form] → render the public contact form inside any post/page content.
+add_filter('post_content', function (string $html, array $post = []): string {
+    if (strpos($html, '[contact_form]') === false) {
+        return $html;
+    }
+    $pdo = $GLOBALS['pdo'] ?? null;
+    if (!($pdo instanceof PDO) || !function_exists('cf_render_form')) {
+        return str_replace('[contact_form]', '', $html);
+    }
+    return str_replace('[contact_form]', cf_render_form($pdo), $html);
+});

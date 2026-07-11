@@ -331,6 +331,7 @@ function cf_bulk_options(string $statusFilter): string {
       <button type="button" class="adam-button adam-button--secondary" onclick="openCfModal('cf-modal-builder')">Form Builder</button>
       <button type="button" class="adam-button adam-button--secondary" onclick="openCfModal('cf-modal-recaptcha')">reCAPTCHA</button>
       <button type="button" class="adam-button adam-button--secondary" onclick="openCfModal('cf-modal-access')">Access</button>
+      <button type="button" class="adam-button adam-button--secondary" onclick="openCfModal('cf-modal-shortcode')">Shortcode</button>
     </div>
   </div>
 
@@ -584,6 +585,26 @@ function cf_bulk_options(string $statusFilter): string {
   </div>
 </div>
 
+<!-- Modal: Shortcode -->
+<div id="cf-modal-shortcode" class="cf-modal" onclick="closeCfModalOnBackdrop(event)">
+  <div class="cf-modal__box" onclick="event.stopPropagation()">
+    <div class="cf-modal__head">
+      <h3>Contact Form Shortcode</h3>
+      <button type="button" class="cf-modal__close" onclick="closeCfModal('cf-modal-shortcode')" aria-label="Close"></button>
+    </div>
+    <div class="cf-modal__body">
+      <p style="margin:0 0 .75rem;color:var(--adam-muted);font-size:.92rem">Paste this shortcode into any post, page, or widget content to render the contact form.</p>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <input type="text" id="cf-shortcode-value" class="inpud" value="[contact_form]" readonly onclick="this.select()" style="flex:1;font-family:monospace">
+        <button type="button" class="adam-button" onclick="cfCopyShortcode()">Copy</button>
+      </div>
+    </div>
+    <div class="cf-modal__foot">
+      <button type="button" class="adam-cancle" onclick="closeCfModal('cf-modal-shortcode')">Close</button>
+    </div>
+  </div>
+</div>
+
 <style>
 .cf-admin { color: var(--adam-text); }
 .cf-admin__head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
@@ -682,6 +703,22 @@ function openCfModal(id){ var el = document.getElementById(id); if (el) el.class
 function closeCfModal(id){ var el = document.getElementById(id); if (el) el.classList.remove('active'); }
 function closeCfModalOnBackdrop(e){ if (e.target === e.currentTarget) e.target.classList.remove('active'); }
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape') document.querySelectorAll('.cf-modal.active').forEach(function(m){ m.classList.remove('active'); }); });
+
+function cfCopyShortcode(){
+  var input = document.getElementById('cf-shortcode-value');
+  var val = input ? input.value : '[contact_form]';
+  var done = function(){
+    if (typeof cfToast === 'function') cfToast('Shortcode copied.', 'success');
+    else alert('Shortcode copied: ' + val);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(val).then(done, function(){ cfFallbackCopy(input, done); });
+  } else { cfFallbackCopy(input, done); }
+}
+function cfFallbackCopy(input, done){
+  if (input) { input.select(); try { document.execCommand('copy'); } catch(e){} }
+  done();
+}
 
 function cfRenderFields(){
   var container = document.getElementById('cf-fields-list');
