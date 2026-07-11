@@ -641,7 +641,7 @@ function cf_bulk_options(string $statusFilter): string {
 .cf-badge--read { background: rgba(107, 114, 128, .12); color: #6b7280; }
 .cf-badge--spam { background: rgba(234, 179, 8, .15); color: #a16207; }
 .cf-badge--trash { background: rgba(220, 38, 38, .10); color: #991b1b; }
-.cf-btn { border: 1px solid var(--adam-border); border-radius: 6px; padding: .35rem .65rem; background: #fff; color: var(--adam-text); font-size: .8rem; cursor: pointer; transition: background .15s; }
+.cf-btn { border: 1px solid var(--adam-border); border-radius: 6px; padding: .35rem .65rem; background: var(--adam-card); color: var(--adam-text); font-size: .8rem; cursor: pointer; transition: background .15s; }
 .cf-btn:hover { background: var(--adam-hover); }
 .cf-btn--sm { padding: .25rem .5rem; font-size: .75rem; }
 .cf-btn--secondary { background: var(--adam-card); }
@@ -671,7 +671,7 @@ function cf_bulk_options(string $statusFilter): string {
 .cf-field-row__top { display: grid; grid-template-columns: 1fr 1fr auto; gap: .5rem; align-items: end; margin-bottom: .5rem; }
 .cf-field-row__opts { display: flex; gap: .75rem; align-items: center; font-size: .85rem; }
 .cf-field-row__actions { display: flex; gap: .3rem; }
-.cf-field-row input, .cf-field-row select { padding: .4rem .5rem; border: 1px solid var(--adam-border); border-radius: 6px; font-size: .85rem; }
+.cf-field-row input, .cf-field-row select { padding: .4rem .5rem; border: 1px solid var(--adam-border); border-radius: 6px; font-size: .85rem; background: var(--adam-card); color: var(--adam-text); caret-color: var(--adam-text); }
 .cf-field-row label { font-size: .75rem; color: var(--adam-muted); display: block; margin-bottom: .2rem; }
 .cf-field { display: grid; gap: .35rem; margin-bottom: .75rem; }
 .cf-field__label { font-size: .8rem; font-weight: 600; color: var(--adam-text); }

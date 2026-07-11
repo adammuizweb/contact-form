@@ -1,6 +1,6 @@
 {
   "name": "contact-form",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "title": "Contact Form",
   "icon": "icon.png",
   "description": "Customizable contact form with form builder and database storage.",
