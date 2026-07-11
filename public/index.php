@@ -78,7 +78,7 @@ $content_html = <<< 'HTML'
       <p class="cf-lead">Send us a message and we will get back to you as soon as possible.</p>
     </div>
 
-    <form class="cf-form" id="cfForm" method="post" action="/contact/submit" novalidate>
+    <form class="cf-form" id="cfForm" method="post" action="/contact/submit/" novalidate>
       <input type="hidden" name="csrf_token" value="__CSRF_ESC__">
       __FIELDS__
       __RECAPTCHA_DIV__
@@ -190,7 +190,7 @@ __RECAPTCHA_SCRIPT__
 
     try {
       const fd = new FormData(form);
-      const r = await fetch('/contact/submit', { method: 'POST', body: fd });
+      const r = await fetch('/contact/submit/', { method: 'POST', body: fd });
       const text = await r.text();
       if (r.ok) {
         hint.textContent = 'Message sent successfully.';
