@@ -5,6 +5,8 @@
 // (section + inline CSS/JS) that posts to /contact/submit/.
 declare(strict_types=1);
 
+require_once __DIR__ . '/_helpers.php';
+
 if (!function_exists('cf_render_form')):
 
 function cf_render_form(PDO $pdo): string {
@@ -55,7 +57,7 @@ function cf_render_form(PDO $pdo): string {
       <p class="cf-lead">Send us a message and we will get back to you as soon as possible.</p>
     </div>
 
-    <form class="cf-form" id="cfForm" method="post" action="/contact/submit/" novalidate>
+    <form class="cf-form" id="cfForm" method="post" action="/cf-submit/" novalidate>
       <input type="hidden" name="csrf_token" value="__CSRF_ESC__">
       __FIELDS__
       __RECAPTCHA_DIV__
@@ -167,7 +169,7 @@ __RECAPTCHA_SCRIPT__
 
     try {
       var fd = new FormData(form);
-      var r = await fetch('/contact/submit/', { method: 'POST', body: fd });
+      var r = await fetch('/cf-submit/', { method: 'POST', body: fd });
       var text = await r.text();
       if (r.ok) {
         hint.textContent = 'Message sent successfully.';

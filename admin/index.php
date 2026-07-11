@@ -331,7 +331,6 @@ function cf_bulk_options(string $statusFilter): string {
       <button type="button" class="adam-button adam-button--secondary" onclick="openCfModal('cf-modal-builder')">Form Builder</button>
       <button type="button" class="adam-button adam-button--secondary" onclick="openCfModal('cf-modal-recaptcha')">reCAPTCHA</button>
       <button type="button" class="adam-button adam-button--secondary" onclick="openCfModal('cf-modal-access')">Access</button>
-      <button type="button" class="adam-button adam-button--secondary" onclick="openCfModal('cf-modal-shortcode')">Shortcode</button>
     </div>
   </div>
 
@@ -453,6 +452,14 @@ function cf_bulk_options(string $statusFilter): string {
       <input type="hidden" name="form_fields_json" id="cf-fields-json" value="">
 
       <div class="cf-modal__body">
+        <div style="margin-bottom:1rem;padding:.75rem;border:1px solid var(--adam-border);border-radius:10px;background:var(--adam-card)">
+          <div style="font-weight:600;margin-bottom:.4rem">Shortcode</div>
+          <p style="margin:0 0 .5rem;color:var(--adam-muted);font-size:.85rem">Paste into any post, page, or widget to render this form.</p>
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <input type="text" id="cf-shortcode-value" class="inpud" value="[contact_form]" readonly onclick="this.select()" style="flex:1;font-family:monospace">
+            <button type="button" class="adam-button adam-button--secondary" onclick="cfCopyShortcode()">Copy</button>
+          </div>
+        </div>
         <div class="cf-fields" id="cf-fields-list">
           <!-- fields rendered by JS -->
         </div>
@@ -582,26 +589,6 @@ function cf_bulk_options(string $statusFilter): string {
         <button type="button" class="adam-button" onclick="cfSaveAccess()">Save Access</button>
       </div>
     </form>
-  </div>
-</div>
-
-<!-- Modal: Shortcode -->
-<div id="cf-modal-shortcode" class="cf-modal" onclick="closeCfModalOnBackdrop(event)">
-  <div class="cf-modal__box" onclick="event.stopPropagation()">
-    <div class="cf-modal__head">
-      <h3>Contact Form Shortcode</h3>
-      <button type="button" class="cf-modal__close" onclick="closeCfModal('cf-modal-shortcode')" aria-label="Close"></button>
-    </div>
-    <div class="cf-modal__body">
-      <p style="margin:0 0 .75rem;color:var(--adam-muted);font-size:.92rem">Paste this shortcode into any post, page, or widget content to render the contact form.</p>
-      <div style="display:flex;gap:.5rem;align-items:center">
-        <input type="text" id="cf-shortcode-value" class="inpud" value="[contact_form]" readonly onclick="this.select()" style="flex:1;font-family:monospace">
-        <button type="button" class="adam-button" onclick="cfCopyShortcode()">Copy</button>
-      </div>
-    </div>
-    <div class="cf-modal__foot">
-      <button type="button" class="adam-cancle" onclick="closeCfModal('cf-modal-shortcode')">Close</button>
-    </div>
   </div>
 </div>
 

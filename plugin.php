@@ -6,9 +6,11 @@ if (!defined('DASHBOARD_CONTEXT') && !defined('PLUGIN_SYSTEM_LOADED')) {
     return;
 }
 
-// Register frontend public route.
+// Submit endpoint for the public form. Kept off the `contact` prefix so the
+// `contact` slug stays free for a CMS Page. The form (rendered via the
+// [contact_form] shortcode) posts to /cf-submit/.
 if (function_exists('register_frontend_route')) {
-    register_frontend_route('contact', PLUGIN_PATH . '/contact-form/public/index.php');
+    register_frontend_route('cf-submit', PLUGIN_PATH . '/contact-form/public/submit.php');
 }
 
 // Settings keys
